@@ -6,7 +6,7 @@ import json
 import logging
 import datetime
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time as datetime_time
 from settings import GiV_Settings
 import settings
 import time
@@ -835,6 +835,19 @@ async def setDischargeRateAC(device,payload,readloop=False):
         logger.error (temp['result'])
     return json.dumps(temp)
 
+def _parse_hhmm(value):
+    """Parse an inverter time slot from HA/Predbat strings or Python time values.
+
+    HA/Predbat can supply a ``datetime`` object where GivTCP's REST and MQTT
+    controls have historically expected an ``HH:MM`` string. Keep the
+    inverter-facing value as a naive datetime on the 1900-01-01 date, matching
+    ``datetime.strptime(..., "%H:%M")``.
+    """
+    if isinstance(value, (datetime, datetime_time)):
+        value = value.strftime("%H:%M")
+    return datetime.strptime(value, "%H:%M")
+
+
 async def setChargeSlot(device,payload,readloop=False):
     temp={}
     if type(payload) is not dict: payload=json.loads(payload)
@@ -842,7 +855,7 @@ async def setChargeSlot(device,payload,readloop=False):
     try:
         logger.debug("Setting Charge Slot "+str(payload['slot'])+" to: "+str(payload['start'])+" - "+str(payload['finish']))
         #temp= await scs(payload,readloop)
-        slot=TimeSlot(datetime.strptime(payload['start'],"%H:%M"),datetime.strptime(payload['finish'],"%H:%M"))
+        slot=TimeSlot(_parse_hhmm(payload['start']),_parse_hhmm(payload['finish']))
 ##############
         if isEMS(device):
             reqs=device.set_ems_charge_slot(int(payload['slot']),slot)
@@ -856,11 +869,11 @@ async def setChargeSlot(device,payload,readloop=False):
         if 'error' in result:
             raise Exception(result['error'])
         if 'ems' in GiV_Settings.inverter_type.lower():
-            updateControlCache("EMS_Charge_start_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['start'],"%H:%M")),True)
-            updateControlCache("EMS_Charge_end_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['finish'],"%H:%M")),True)
+            updateControlCache("EMS_Charge_start_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['start'])),True)
+            updateControlCache("EMS_Charge_end_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['finish'])),True)
         else:
-            updateControlCache("Charge_start_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['start'],"%H:%M")),True)
-            updateControlCache("Charge_end_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['finish'],"%H:%M")),True)
+            updateControlCache("Charge_start_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['start'])),True)
+            updateControlCache("Charge_end_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['finish'])),True)
         temp['result']="Setting Charge Slot "+str(payload['slot'])+" to: "+str(payload['start'])+" - "+str(payload['finish'])+" was a success"
         logger.info(temp['result'])
     except:
@@ -886,13 +899,13 @@ async def setPauseSlot(device,payload,readloop=False):
         checkPauseSlot(device)
         logger.debug("Setting Battery Pause slot to: "+str(payload['start'])+" - "+str(payload['finish']))
         #temp= await sps(payload,readloop)
-        slot=TimeSlot(datetime.strptime(payload['start'],"%H:%M"),datetime.strptime(payload['finish'],"%H:%M"))
+        slot=TimeSlot(_parse_hhmm(payload['start']),_parse_hhmm(payload['finish']))
         reqs=gecommands.set_pause_slot(slot)
         result= await sendAsyncCommand(reqs,readloop)
         if 'error' in result:
             raise Exception(result['error'])
-        updateControlCache("Battery_pause_start_time_slot",str(datetime.strptime(payload['start'],"%H:%M")),True)
-        updateControlCache("Battery_pause_end_time_slot",str(datetime.strptime(payload['finish'],"%H:%M")),True)
+        updateControlCache("Battery_pause_start_time_slot",str(_parse_hhmm(payload['start'])),True)
+        updateControlCache("Battery_pause_end_time_slot",str(_parse_hhmm(payload['finish'])),True)
         temp['result']="Setting Pause Slot to: "+str(payload['start'])+" - "+str(payload['finish'])+" was a success"
         logger.info(temp['result'])
     except:
@@ -909,16 +922,16 @@ async def setChargeSlotStart(device,payload,readloop=False):
         logger.debug("Setting Charge Slot "+str(payload['slot'])+" Start to: "+str(payload['start']))
         #temp= await scss(payload,readloop)
         if isEMS(device):
-            reqs=device.set_ems_charge_slot_start(int(payload['slot']),datetime.strptime(payload['start'],"%H:%M"))
+            reqs=device.set_ems_charge_slot_start(int(payload['slot']),_parse_hhmm(payload['start']))
         else:
-            reqs=device.set_charge_slot_start(int(payload['slot']),datetime.strptime(payload['start'],"%H:%M"))
+            reqs=device.set_charge_slot_start(int(payload['slot']),_parse_hhmm(payload['start']))
         result= await sendAsyncCommand(reqs,readloop)
         if 'error' in result:
             raise Exception(result['error'])
         if 'ems' in GiV_Settings.inverter_type.lower():
-            updateControlCache("EMS_Charge_start_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['start'],"%H:%M")),True)
+            updateControlCache("EMS_Charge_start_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['start'])),True)
         else:
-            updateControlCache("Charge_start_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['start'],"%H:%M")),True)
+            updateControlCache("Charge_start_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['start'])),True)
         temp['result']="Setting Charge Slot "+str(payload['slot'])+" Start to: "+str(payload['start'])+" was a success"
         logger.info(temp['result'])
     except:
@@ -935,16 +948,16 @@ async def setChargeSlotEnd(device,payload,readloop=False):
         logger.debug("Setting Charge Slot End "+str(payload['slot'])+" to: "+str(payload['finish']))
         #temp= await scse(payload,readloop)
         if isEMS(device):
-            reqs=device.set_ems_charge_slot_end(int(payload['slot']),datetime.strptime(payload['finish'],"%H:%M"))
+            reqs=device.set_ems_charge_slot_end(int(payload['slot']),_parse_hhmm(payload['finish']))
         else:
-            reqs=device.set_charge_slot_end(int(payload['slot']),datetime.strptime(payload['finish'],"%H:%M"))
+            reqs=device.set_charge_slot_end(int(payload['slot']),_parse_hhmm(payload['finish']))
         result= await sendAsyncCommand(reqs,readloop)
         if 'error' in result:
             raise Exception(result['error'])
         if 'ems' in GiV_Settings.inverter_type.lower():
-            updateControlCache("EMS_Charge_end_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['finish'],"%H:%M")),True)
+            updateControlCache("EMS_Charge_end_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['finish'])),True)
         else:
-            updateControlCache("Charge_end_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['finish'],"%H:%M")),True)
+            updateControlCache("Charge_end_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['finish'])),True)
         temp['result']="Setting Charge Slot End "+str(payload['slot'])+" to: "+str(payload['finish'])+" was a success"
         logger.info(temp['result'])
     except:
@@ -959,11 +972,11 @@ async def setExportSlotStart(device,payload,readloop=False):
     try:
         logger.debug("Setting Export Slot "+str(payload['slot'])+" Start to: "+str(payload['start']))
         #temp= await sess(payload,readloop)
-        reqs=device.set_export_slot_start(int(payload['slot']),datetime.strptime(payload['start'],"%H:%M"))
+        reqs=device.set_export_slot_start(int(payload['slot']),_parse_hhmm(payload['start']))
         result= await sendAsyncCommand(reqs,readloop)
         if 'error' in result:
             raise Exception(result['error'])
-        updateControlCache("Export_start_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['start'],"%H:%M")),True)
+        updateControlCache("Export_start_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['start'])),True)
         temp['result']="Setting Export Slot "+str(payload['slot'])+" Start to: "+str(payload['start'])+" was a success"
         logger.info(temp['result'])
     except:
@@ -978,11 +991,11 @@ async def setExportSlotEnd(device,payload,readloop=False):
     try:
         logger.debug("Setting Export Slot End "+str(payload['slot'])+" to: "+str(payload['finish']))
         #temp= await sese(payload,readloop)
-        reqs=device.set_export_slot_end(int(payload['slot']),datetime.strptime(payload['finish'],"%H:%M"))
+        reqs=device.set_export_slot_end(int(payload['slot']),_parse_hhmm(payload['finish']))
         result= await sendAsyncCommand(reqs,readloop)
         if 'error' in result:
             raise Exception(result['error'])
-        updateControlCache("Export_end_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['finish'],"%H:%M")),True)
+        updateControlCache("Export_end_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['finish'])),True)
         temp['result']="Setting Export Slot End "+str(payload['slot'])+" to: "+str(payload['finish'])+" was a success"
         logger.info(temp['result'])
     except:
@@ -1005,7 +1018,7 @@ async def setDischargeSlot(device,payload,readloop=False):
 
         logger.debug("Setting Discharge Slot "+str(payload['slot'])+" to: "+str(payload['start'])+" - "+str(payload['finish']))
         #temp= await sds(payload,readloop)
-        slot=TimeSlot(datetime.strptime(payload['start'],"%H:%M"),datetime.strptime(payload['finish'],"%H:%M"))
+        slot=TimeSlot(_parse_hhmm(payload['start']),_parse_hhmm(payload['finish']))
         if isEMS(device):
             reqs=device.set_ems_discharge_slot(int(payload['slot']),slot)
             if 'dischargeToPercent' in payload.keys():
@@ -1016,11 +1029,11 @@ async def setDischargeSlot(device,payload,readloop=False):
         if 'error' in result:
             raise Exception(result['error'])
         if 'ems' in GiV_Settings.inverter_type.lower():
-            updateControlCache("EMS_Discharge_start_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['start'],"%H:%M")),True)
-            updateControlCache("EMS_Discharge_end_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['finish'],"%H:%M")),True)
+            updateControlCache("EMS_Discharge_start_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['start'])),True)
+            updateControlCache("EMS_Discharge_end_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['finish'])),True)
         else:
-            updateControlCache("Discharge_start_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['start'],"%H:%M")),True)
-            updateControlCache("Discharge_end_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['finish'],"%H:%M")),True)
+            updateControlCache("Discharge_start_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['start'])),True)
+            updateControlCache("Discharge_end_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['finish'])),True)
         temp['result']="Setting Discharge Slot "+str(payload['slot'])+" to: "+str(payload['start'])+" - "+str(payload['finish'])+" was a success"
         logger.info(temp['result'])
     except:
@@ -1035,13 +1048,13 @@ async def setExportSlot(device,payload,readloop=False):
     try:
         logger.debug("Setting Export Slot "+str(payload['slot'])+" to: "+str(payload['start'])+" - "+str(payload['finish']))
         #temp= await ses(payload,readloop)
-        slot=TimeSlot(datetime.strptime(payload['start'],"%H:%M"),datetime.strptime(payload['finish'],"%H:%M"))
+        slot=TimeSlot(_parse_hhmm(payload['start']),_parse_hhmm(payload['finish']))
         reqs=device.set_export_slot(int(payload['slot']),slot)
         result= await sendAsyncCommand(reqs,readloop)
         if 'error' in result:
             raise Exception(result['error'])
-        updateControlCache("Export_start_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['start'],"%H:%M")),True)
-        updateControlCache("Export_end_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['finish'],"%H:%M")),True)
+        updateControlCache("Export_start_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['start'])),True)
+        updateControlCache("Export_end_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['finish'])),True)
         temp['result']="Setting Export Slot "+str(payload['slot'])+" to: "+str(payload['start'])+" - "+str(payload['finish'])+" was a success"
         logger.info(temp['result'])
     except:
@@ -1058,16 +1071,16 @@ async def setDischargeSlotStart(device,payload,readloop=False):
         logger.debug("Setting Discharge Slot start "+str(payload['slot'])+" Start to: "+str(payload['start']))
         #temp= await sdss(payload,readloop)
         if isEMS(device):
-            reqs=device.set_ems_discharge_slot_start(int(payload['slot']),datetime.strptime(payload['start'],"%H:%M"))
+            reqs=device.set_ems_discharge_slot_start(int(payload['slot']),_parse_hhmm(payload['start']))
         else:
-            reqs=device.set_discharge_slot_start(int(payload['slot']),datetime.strptime(payload['start'],"%H:%M"))
+            reqs=device.set_discharge_slot_start(int(payload['slot']),_parse_hhmm(payload['start']))
         result= await sendAsyncCommand(reqs,readloop)
         if 'error' in result:
             raise Exception(result['error'])
         if 'ems' in GiV_Settings.inverter_type.lower():
-            updateControlCache("EMS_Discharge_start_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['start'],"%H:%M")),True)
+            updateControlCache("EMS_Discharge_start_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['start'])),True)
         else:
-            updateControlCache("Discharge_start_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['start'],"%H:%M")),True)
+            updateControlCache("Discharge_start_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['start'])),True)
         temp['result']="Setting Discharge Slot start "+str(payload['slot'])+" Start to: "+str(payload['start'])+" was a success"
         logger.info(temp['result'])
     except:
@@ -1084,16 +1097,16 @@ async def setDischargeSlotEnd(device,payload,readloop=False):
         logger.debug("Setting Discharge Slot End "+str(payload['slot'])+" to: "+str(payload['finish']))
         #temp= await sdse(payload,readloop)
         if isEMS(device):
-            reqs=device.set_ems_discharge_slot_end(int(payload['slot']),datetime.strptime(payload['finish'],"%H:%M"))
+            reqs=device.set_ems_discharge_slot_end(int(payload['slot']),_parse_hhmm(payload['finish']))
         else:
-            reqs=device.set_discharge_slot_end(int(payload['slot']),datetime.strptime(payload['finish'],"%H:%M"))
+            reqs=device.set_discharge_slot_end(int(payload['slot']),_parse_hhmm(payload['finish']))
         result= await sendAsyncCommand(reqs,readloop)
         if 'error' in result:
             raise Exception(result['error'])
         if 'ems' in GiV_Settings.inverter_type.lower():
-            updateControlCache("EMS_Discharge_end_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['finish'],"%H:%M")),True)
+            updateControlCache("EMS_Discharge_end_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['finish'])),True)
         else:
-            updateControlCache("Discharge_end_time_slot_"+str(payload['slot']),str(datetime.strptime(payload['finish'],"%H:%M")),True)
+            updateControlCache("Discharge_end_time_slot_"+str(payload['slot']),str(_parse_hhmm(payload['finish'])),True)
         temp['result']="Setting Discharge Slot End "+str(payload['slot'])+" to: "+str(payload['finish'])+" was a success"
         logger.info(temp['result'])
     except:
@@ -1109,11 +1122,11 @@ async def setPauseStart(device,payload,readloop=False):
         checkPauseSlot(device)
         logger.debug("Setting Pause Slot Start to: "+str(payload['start']))
         #temp= await spss(payload,readloop)
-        reqs=gecommands.set_pause_slot_start(datetime.strptime(payload['start'],"%H:%M"))
+        reqs=gecommands.set_pause_slot_start(_parse_hhmm(payload['start']))
         result= await sendAsyncCommand(reqs,readloop)
         if 'error' in result:
             raise Exception(result)
-        updateControlCache("Battery_pause_start_time_slot",str(datetime.strptime(payload['start'],"%H:%M")),True)
+        updateControlCache("Battery_pause_start_time_slot",str(_parse_hhmm(payload['start'])),True)
         temp['result']="Setting Pause Slot Start to: "+str(payload['start'])+" was a success"
         logger.info(temp['result'])
     except:
@@ -1129,11 +1142,11 @@ async def setPauseEnd(device,payload,readloop=False):
         checkPauseSlot(device)
         logger.debug("Setting Pause Slot End to: "+str(payload['finish']))
         #temp= await spse(payload,readloop)
-        reqs=gecommands.set_pause_slot_end(datetime.strptime(payload['finish'],"%H:%M"))
+        reqs=gecommands.set_pause_slot_end(_parse_hhmm(payload['finish']))
         result= await sendAsyncCommand(reqs,readloop)
         if 'error' in result:
             raise Exception(result)
-        updateControlCache("Battery_pause_end_time_slot",str(datetime.strptime(payload['finish'],"%H:%M")),True)
+        updateControlCache("Battery_pause_end_time_slot",str(_parse_hhmm(payload['finish'])),True)
         temp['result']="Setting Pause Slot End to: "+str(payload['finish'])+" was a success"
         logger.info(temp['result'])
     except:
@@ -1155,7 +1168,7 @@ async def FEResume(device,revert, readloop=False):
             reqs.extend(device.set_battery_soc_reserve(revert["reservePercent"]))
         if "start_time" in revert and "end_time" in revert:
             # Force Export used discharge slot 1, so put that back
-            slot=TimeSlot(datetime.strptime(revert['start_time'],"%H:%M"),datetime.strptime(revert['end_time'],"%H:%M"))
+            slot=TimeSlot(_parse_hhmm(revert['start_time']),_parse_hhmm(revert['end_time']))
             reqs.extend(device.set_discharge_slot(1,slot))
         if "discharge_schedule" in revert:
             reqs.extend(device.set_enable_discharge(revert["discharge_schedule"]=="enable"))
@@ -1285,7 +1298,7 @@ async def FCResume(device,revert,readloop=False):
         if "chargeScheduleEnable" in revert:
             reqs.extend(device.set_enable_charge(revert["chargeScheduleEnable"]=="enable"))
         if "start_time" in revert and "end_time" in revert:
-            slot=TimeSlot(datetime.strptime(revert['start_time'],"%H:%M"),datetime.strptime(revert['end_time'],"%H:%M"))
+            slot=TimeSlot(_parse_hhmm(revert['start_time']),_parse_hhmm(revert['end_time']))
             reqs.extend(device.set_charge_slot(1,slot))
         if "targetSOC" in revert:
             reqs.extend(chargeTargetSOC(device,int(revert["targetSOC"])))

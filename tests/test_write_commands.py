@@ -7,12 +7,32 @@ mqtt:   a message on the control topic; the read loop runs the queued command
 Each result records GivTCP's reply, the registers written to the plant, any revert jobs scheduled and any
 warnings or errors logged.
 """
+from datetime import datetime, time
+
 import pytest
 
 from harness import catalogue, golden
 from harness.devices import DEVICES
+import write
 
 MODELS = list(DEVICES)
+
+@pytest.mark.parametrize("value", ["23:30", datetime(2026, 10, 17, 23, 30), time(23, 30)])
+def test_parse_hhmm_accepts_strings_and_datetime_values(value):
+    assert write._parse_hhmm(value) == datetime(1900, 1, 1, 23, 30)
+
+def test_set_charge_slot_accepts_datetime_payloads(plants):
+    outcome = plants.get("hybrid_gen1").run_case("direct", [
+        ("setChargeSlot", {
+            "start": datetime(2026, 10, 16, 23, 30),
+            "finish": datetime(2026, 10, 17, 5, 30),
+            "slot": "1",
+            "chargeToPercent": "100",
+        }),
+    ])[0]
+
+    assert "was a success" in outcome["result"]["result"]
+    assert outcome["writes"]
 
 @pytest.mark.parametrize("case", list(catalogue.DIRECT))
 @pytest.mark.parametrize("model", MODELS)
