@@ -28,4 +28,6 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/vaughnlfisher/giv_tcp:latest
+          tags: |
+            ghcr.io/vaughnlfisher/giv_tcp:latest
+            ghcr.io/vaughnlfisher/giv_tcp:3.6.7.1
